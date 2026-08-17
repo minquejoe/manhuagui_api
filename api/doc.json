@@ -52,6 +52,10 @@
     {
       "name": "Message",
       "description": "message-controller"
+    },
+    {
+      "name": "Proxy",
+      "description": "proxy-controller"
     }
   ],
   "paths": {
@@ -1020,6 +1024,33 @@
             "description": "200 OK",
             "schema": {
               "$ref": "#/definitions/_Result<LatestMessageDto>"
+            }
+          }
+        }
+      }
+    },
+    "/v1/proxy/status": {
+      "get": {
+        "summary": "Get xray proxy status",
+        "operationId": "-v1-proxy-status-get",
+        "tags": [
+          "Proxy"
+        ],
+        "parameters": [
+          {
+            "name": "allow_cache",
+            "in": "query",
+            "required": false,
+            "description": "flag to allow using cache",
+            "type": "boolean",
+            "default": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "200 OK",
+            "schema": {
+              "$ref": "#/definitions/_Result<ProxyStatus>"
             }
           }
         }
@@ -2398,6 +2429,73 @@
         }
       }
     },
+    "ProxyStatus": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "ready",
+        "node_count",
+        "refresh_interval_seconds",
+        "probe_interval_seconds",
+        "probe_url",
+        "subscriptions"
+      ],
+      "description": "xray proxy status response",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "proxy enabled in config"
+        },
+        "ready": {
+          "type": "boolean",
+          "description": "xray SOCKS proxy is ready"
+        },
+        "node_count": {
+          "type": "integer",
+          "format": "int32",
+          "description": "parsed node count"
+        },
+        "current_tag": {
+          "type": "string",
+          "description": "selected outbound tag"
+        },
+        "current_node": {
+          "type": "string",
+          "description": "selected node name"
+        },
+        "current_latency_ms": {
+          "type": "integer",
+          "format": "int64",
+          "description": "selected node latency"
+        },
+        "last_updated": {
+          "type": "string",
+          "format": "date-time",
+          "description": "last subscription refresh time"
+        },
+        "refresh_interval_seconds": {
+          "type": "integer",
+          "format": "int64",
+          "description": "subscription refresh interval"
+        },
+        "probe_interval_seconds": {
+          "type": "integer",
+          "format": "int64",
+          "description": "latency probe interval"
+        },
+        "probe_url": {
+          "type": "string",
+          "description": "latency probe url"
+        },
+        "subscriptions": {
+          "type": "array",
+          "description": "configured subscription urls",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "RandomMangaInfoDto": {
       "type": "object",
       "required": [
@@ -3514,6 +3612,29 @@
         },
         "data": {
           "$ref": "#/definitions/MangaGroupListDto"
+        }
+      }
+    },
+    "_Result<ProxyStatus>": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "data"
+      ],
+      "description": "global response",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32",
+          "description": "status code"
+        },
+        "message": {
+          "type": "string",
+          "description": "status message"
+        },
+        "data": {
+          "$ref": "#/definitions/ProxyStatus"
         }
       }
     },

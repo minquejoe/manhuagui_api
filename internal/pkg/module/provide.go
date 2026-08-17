@@ -7,6 +7,7 @@ import (
 	"github.com/Aoi-hosizora/manhuagui-api/internal/pkg/config"
 	"github.com/Aoi-hosizora/manhuagui-api/internal/pkg/logger"
 	"github.com/Aoi-hosizora/manhuagui-api/internal/pkg/module/sn"
+	"github.com/Aoi-hosizora/manhuagui-api/internal/pkg/xrayproxy"
 	"github.com/Aoi-hosizora/manhuagui-api/internal/service"
 )
 
@@ -37,17 +38,19 @@ func Provide(configPath string) error {
 	// 2. services
 	// ===========
 
-	xmodule.ProvideByName(sn.SHttpService, service.NewHttpService())           // *service.HttpService
-	xmodule.ProvideByName(sn.SCategoryService, service.NewCategoryService())   // *service.CategoryService
-	xmodule.ProvideByName(sn.SAuthorService, service.NewAuthorService())       // *service.AuthorService
-	xmodule.ProvideByName(sn.SMangaService, service.NewMangaService())         // *service.MangaService
-	xmodule.ProvideByName(sn.SRankService, service.NewRankService())           // *service.RankService
-	xmodule.ProvideByName(sn.SMangaListService, service.NewMangaListService()) // *service.MangaListService
-	xmodule.ProvideByName(sn.SSearchService, service.NewSearchService())       // *service.SearchService
-	xmodule.ProvideByName(sn.SCommentService, service.NewCommentService())     // *service.CommentService
-	xmodule.ProvideByName(sn.SUserService, service.NewUserService())           // *service.UserService
-	xmodule.ProvideByName(sn.SShelfService, service.NewShelfService())         // *service.ShelfService
-	xmodule.ProvideByName(sn.SMessageService, service.NewMessageService())     // *service.MessageService
+	// *xrayproxy.Manager (must be provided before *service.HttpService)
+	xmodule.ProvideByName(sn.SProxyManager, xrayproxy.NewManager(cfg.Proxy, lgr)) // *xrayproxy.Manager
+	xmodule.ProvideByName(sn.SHttpService, service.NewHttpService())              // *service.HttpService
+	xmodule.ProvideByName(sn.SCategoryService, service.NewCategoryService())      // *service.CategoryService
+	xmodule.ProvideByName(sn.SAuthorService, service.NewAuthorService())          // *service.AuthorService
+	xmodule.ProvideByName(sn.SMangaService, service.NewMangaService())            // *service.MangaService
+	xmodule.ProvideByName(sn.SRankService, service.NewRankService())              // *service.RankService
+	xmodule.ProvideByName(sn.SMangaListService, service.NewMangaListService())    // *service.MangaListService
+	xmodule.ProvideByName(sn.SSearchService, service.NewSearchService())          // *service.SearchService
+	xmodule.ProvideByName(sn.SCommentService, service.NewCommentService())        // *service.CommentService
+	xmodule.ProvideByName(sn.SUserService, service.NewUserService())              // *service.UserService
+	xmodule.ProvideByName(sn.SShelfService, service.NewShelfService())            // *service.ShelfService
+	xmodule.ProvideByName(sn.SMessageService, service.NewMessageService())        // *service.MessageService
 
 	return nil
 }

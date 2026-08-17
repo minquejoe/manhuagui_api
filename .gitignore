@@ -12,3 +12,7 @@ logs/*
 config.yaml
 temp/
 proxy.bat
+
+### Xray proxy ###
+bin/
+xray/

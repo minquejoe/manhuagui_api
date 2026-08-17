@@ -43,6 +43,7 @@ func setupRoutes(engine *gin.Engine) {
 		userController      = controller.NewUserController()
 		shelfController     = controller.NewShelfController()
 		messageController   = controller.NewMessageController()
+		proxyController     = controller.NewProxyController()
 	)
 
 	// ============
@@ -113,4 +114,7 @@ func setupRoutes(engine *gin.Engine) {
 	messageGroup := v1.Group("message")
 	messageGroup.GET("", messageController.GetMessages)
 	messageGroup.GET("latest", messageController.GetLatestMessage)
+
+	proxyGroup := v1.Group("proxy")
+	proxyGroup.GET("status", proxyController.GetStatus)
 }

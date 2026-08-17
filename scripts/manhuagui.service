@@ -1,0 +1,28 @@
+# manhuagui_api systemd unit (template)
+# Placeholders are filled in by scripts/deploy.sh:
+#   __DIR__        - application directory
+#   __USER__       - service user
+#   __GROUP__      - service group
+#   __ENV_LINES__  - proxy environment lines (removed when empty)
+
+[Unit]
+Description=manhuagui_api - unofficial manhuagui backend API
+Documentation=https://github.com/Aoi-hosizora/manhuagui_api
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+Group=__GROUP__
+WorkingDirectory=__DIR__
+ExecStart=__DIR__/build/manhuagui_api -c __DIR__/config.yaml
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+LimitNOFILE=65536
+__ENV_LINES__
+
+[Install]
+WantedBy=multi-user.target

@@ -1198,6 +1198,35 @@ message-controller
 
     + Body
 
+# Group Proxy
+
+proxy-controller
+
+## Get xray proxy status [/v1/proxy/status{?allow_cache}]
+
+> `/v1/proxy/status`
+
+### Get xray proxy status [GET]
+
+> `GET /v1/proxy/status`
+
++ Parameters
+
+    + allow_cache (boolean, optional) - flag to allow using cache
+        + Default: `false`
+
++ Request (application/json)
+
+    + Body
+
++ Response 200 (application/json)
+
+    200 OK
+
+    + Attributes (_Result<ProxyStatus>)
+
+    + Body
+
 # Data Structures
 
 ## AuthorDto (object)
@@ -1565,6 +1594,25 @@ message-controller
     (format: int32)
 + message (string, required) - status message
 
+## ProxyStatus (object)
+
++ enabled (boolean, required) - proxy enabled in config
++ ready (boolean, required) - xray SOCKS proxy is ready
++ node_count (number, required) - parsed node count
+    (format: int32)
++ current_tag (string, optional) - selected outbound tag
++ current_node (string, optional) - selected node name
++ current_latency_ms (number, optional) - selected node latency
+    (format: int64)
++ last_updated (string, optional) - last subscription refresh time
+    (format: date-time)
++ refresh_interval_seconds (number, required) - subscription refresh interval
+    (format: int64)
++ probe_interval_seconds (number, required) - latency probe interval
+    (format: int64)
++ probe_url (string, required) - latency probe url
++ subscriptions (array[string], required) - configured subscription urls
+
 ## _Page<SmallAuthorDto> (object)
 
 + page (number, required) - current page
@@ -1746,6 +1794,13 @@ message-controller
     (format: int32)
 + message (string, required) - status message
 + data (LatestMessageDto, required) - response data
+
+## _Result<ProxyStatus> (object)
+
++ code (number, required) - status code
+    (format: int32)
++ message (string, required) - status message
++ data (ProxyStatus, required) - response data
 
 ## _Page<MangaRankDto> (object)
 

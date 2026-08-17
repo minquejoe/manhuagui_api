@@ -6,6 +6,7 @@ const (
 	SConfig xmodule.ModuleName = "config" // *config.Config
 	SLogger xmodule.ModuleName = "logger" // *logrus.Logger
 
+	SProxyManager     xmodule.ModuleName = "proxy-manager"      // *xrayproxy.Manager
 	SHttpService      xmodule.ModuleName = "http-service"       // *service.HttpService
 	SMangaService     xmodule.ModuleName = "manga-service"      // *service.MangaService
 	SMangaListService xmodule.ModuleName = "manga-list-service" // *service.MangaListService

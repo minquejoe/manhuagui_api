@@ -4,16 +4,50 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/Aoi-hosizora/ahlib/xconstant/headers"
+	"github.com/Aoi-hosizora/ahlib/xmodule"
+	"github.com/Aoi-hosizora/manhuagui-api/internal/pkg/module/sn"
 	"github.com/Aoi-hosizora/manhuagui-api/internal/pkg/static"
+	"github.com/Aoi-hosizora/manhuagui-api/internal/pkg/xrayproxy"
 	"github.com/PuerkitoBio/goquery"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
+	"time"
 )
 
-type HttpService struct{}
+type HttpService struct {
+	proxy     *xrayproxy.Manager
+	transport *http.Transport
+}
 
 func NewHttpService() *HttpService {
-	return &HttpService{}
+	h := &HttpService{
+		proxy: xmodule.MustGetByName(sn.SProxyManager).(*xrayproxy.Manager),
+	}
+	h.transport = &http.Transport{
+		Proxy: h.proxyFunc,
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+		IdleConnTimeout:       90 * time.Second,
+	}
+	return h
+}
+
+// proxyFunc routes requests to proxied hosts (manhuagui/hamreus by default)
+// through the local xray SOCKS proxy when it is ready; everything else goes
+// direct. Falls back to direct when xray is not ready yet.
+func (h *HttpService) proxyFunc(req *http.Request) (*url.URL, error) {
+	if h.proxy != nil && h.proxy.IsReady() && h.proxy.ShouldProxy(req.URL.Hostname()) {
+		return h.proxy.ProxyURL(), nil
+	}
+	return nil, nil
 }
 
 func (h *HttpService) DoRequest(client *http.Client, req *http.Request) ([]byte, *http.Response, error) {
@@ -26,7 +60,15 @@ func (h *HttpService) DoRequest(client *http.Client, req *http.Request) ([]byte,
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("network error: %v", err)
+		// Retry idempotent requests once on network errors: when the proxied
+		// node dies between probe cycles, the first attempt fails and the
+		// retry is routed through the next lowest-latency node.
+		if (req.Method == http.MethodGet || req.Method == http.MethodHead) && req.Body == nil {
+			resp, err = client.Do(req.Clone(req.Context()))
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("network error: %v", err)
+		}
 	}
 	body := resp.Body
 	defer body.Close()
@@ -47,7 +89,7 @@ func (h *HttpService) HttpGet(url string, fn func(r *http.Request)) ([]byte, *ht
 		fn(req)
 	}
 
-	return h.DoRequest(&http.Client{}, req)
+	return h.DoRequest(&http.Client{Transport: h.transport}, req)
 }
 
 func (h *HttpService) HttpGetDocument(url string, fn func(*http.Request)) ([]byte, *goquery.Document, error) {
@@ -76,6 +118,7 @@ func (h *HttpService) HttpHeadNoRedirect(url string, fn func(r *http.Request)) (
 	}
 
 	client := &http.Client{
+		Transport: h.transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -93,5 +136,5 @@ func (h *HttpService) HttpPost(url string, body io.Reader, fn func(r *http.Reque
 		fn(req)
 	}
 
-	return h.DoRequest(&http.Client{}, req)
+	return h.DoRequest(&http.Client{Transport: h.transport}, req)
 }

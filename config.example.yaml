@@ -22,3 +22,23 @@ server:
 
 message:
   github-token: xxx
+
+proxy:
+  enabled: true          # route manhuagui requests through the lowest-latency xray node
+  auto-install: true     # download the xray binary automatically when missing
+  # xray-version: v26.3.27  # optional pinned xray release tag
+  xray-bin: ./bin/xray
+  xray-config: ./xray/config.json
+  xray-socks-port: 10808
+  xray-http-port: 10809
+  xray-api-port: 10810
+  subscriptions:         # v2ray-style subscription urls (base64 or plaintext)
+    - https://example.com/sub?token=YOUR_TOKEN
+  refresh-interval: 3600 # seconds: re-fetch the subscription and restart xray if nodes changed
+  probe-interval: 60     # seconds: re-measure every node's latency to probe-url
+  probe-url: https://www.manhuagui.com/
+  hosts:                 # hosts routed through the proxy; "." prefix matches subdomains
+    - manhuagui.com
+    - .manhuagui.com
+    - hamreus.com
+    - .hamreus.com
