@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/Aoi-hosizora/ahlib/xconstant/headers"
 	"github.com/Aoi-hosizora/ahlib/xmodule"
@@ -90,6 +91,45 @@ func (h *HttpService) HttpGet(url string, fn func(r *http.Request)) ([]byte, *ht
 	}
 
 	return h.DoRequest(&http.Client{Transport: h.transport}, req)
+}
+
+// HttpGetStream issues a GET request and returns the response without reading
+// the body (the caller must close resp.Body), for streaming large payloads
+// such as images. redirectAllowed, when non-nil, validates the host of every
+// redirect hop to prevent SSRF. The user agent and referer headers are applied
+// like DoRequest, and the request goes through the xray proxy when enabled.
+func (h *HttpService) HttpGetStream(rawURL string, redirectAllowed func(host string) bool, fn func(r *http.Request)) (*http.Response, error) {
+	req, err := http.NewRequest("GET", rawURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	if fn != nil {
+		fn(req)
+	}
+	if req.Header.Get(headers.UserAgent) == "" {
+		req.Header.Add(headers.UserAgent, static.USER_AGENT)
+	}
+	if req.Header.Get(headers.Referer) == "" {
+		req.Header.Add(headers.Referer, static.REFERER)
+	}
+
+	client := &http.Client{
+		Transport: h.transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			if redirectAllowed != nil && !redirectAllowed(req.URL.Hostname()) {
+				return fmt.Errorf("redirect to non-allowed host %s", req.URL.Hostname())
+			}
+			return nil
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("network error: %v", err)
+	}
+	return resp, nil
 }
 
 func (h *HttpService) HttpGetDocument(url string, fn func(*http.Request)) ([]byte, *goquery.Document, error) {

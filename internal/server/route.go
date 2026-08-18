@@ -44,6 +44,7 @@ func setupRoutes(engine *gin.Engine) {
 		shelfController     = controller.NewShelfController()
 		messageController   = controller.NewMessageController()
 		proxyController     = controller.NewProxyController()
+		imageController     = controller.NewImageProxyController()
 	)
 
 	// ============
@@ -117,4 +118,7 @@ func setupRoutes(engine *gin.Engine) {
 
 	proxyGroup := v1.Group("proxy")
 	proxyGroup.GET("status", proxyController.GetStatus)
+
+	imageGroup := v1.Group("image")
+	imageGroup.GET("proxy", imageController.ProxyImage) // streaming image proxy
 }

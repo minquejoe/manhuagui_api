@@ -45,6 +45,12 @@ HTTP latency among all nodes of a v2ray-style VPN subscription:
    to direct connections.
 5. `GET /v1/proxy/status` reports the current state (ready flag, node count,
    selected node and latency, probe/refresh intervals).
+6. `GET /v1/image/proxy?url=<encoded image url>` proxies whitelisted image CDN
+   urls (`*.hamreus.com`, `*.mhgui.com`, configurable via `proxy.image-hosts`)
+   through the pinned node and streams the response back, so mobile clients
+   can fetch chapter images and covers through the fast server path instead of
+   their own slow/flaky connection to the CDN. See
+   `docs/flutter_image_proxy.md` for the Flutter-side integration prompt.
 
 ```yaml
 proxy:

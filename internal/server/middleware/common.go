@@ -132,7 +132,7 @@ func CacheMiddleware() gin.HandlerFunc {
 		if !cfg.ServerCache || !allowCache || c.Request.Method != "GET" {
 			return
 		}
-		whitelist := []string{"swagger", "random"}
+		whitelist := []string{"swagger", "random", "image"}
 		if xgslice.Any(whitelist, func(s string) bool { return strings.Contains(c.FullPath(), s) }) {
 			return
 		}

@@ -78,6 +78,11 @@ type ProxyConfig struct {
 	// node with the lowest combined latency is then pinned as the proxy node.
 	ProbeExtraURLs []string `yaml:"probe-extra-urls"`
 
+	// ImageHosts is the whitelist of image CDN hosts allowed to be fetched
+	// through GET /v1/image/proxy (SSRF protection). Defaults to hamreus.com
+	// and mhgui.com.
+	ImageHosts []string `yaml:"image-hosts"`
+
 	// Hosts whose requests are routed through the proxy. Entries may start
 	// with "." to match any subdomain. Defaults to manhuagui/hamreus domains.
 	Hosts []string `yaml:"hosts"`

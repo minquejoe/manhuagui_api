@@ -38,7 +38,8 @@ proxy:
   probe-interval: 3600    # seconds: re-measure every node's latency and re-select the best node (1h)
   probe-url: https://www.manhuagui.com/
   probe-extra-urls:       # extra latency targets measured per node each round (combined with probe-url)
-    - https://i.hamreus.com/   # image CDN, so the pinned node is fast for images too
+    - https://i.hamreus.com/        # chapter images CDN
+    - https://cf.mhgui.com/         # covers CDN
   hosts:                 # hosts routed through the proxy; "." prefix matches subdomains
     - manhuagui.com
     - .manhuagui.com
