@@ -34,9 +34,11 @@ proxy:
   xray-api-port: 10810
   subscriptions:         # v2ray-style subscription urls (base64 or plaintext)
     - https://example.com/sub?token=YOUR_TOKEN
-  refresh-interval: 3600 # seconds: re-fetch the subscription and restart xray if nodes changed
-  probe-interval: 60     # seconds: re-measure every node's latency to probe-url
+  refresh-interval: 86400 # seconds: re-fetch the subscription and restart xray if nodes changed (24h)
+  probe-interval: 3600    # seconds: re-measure every node's latency and re-select the best node (1h)
   probe-url: https://www.manhuagui.com/
+  probe-extra-urls:       # extra latency targets measured per node each round (combined with probe-url)
+    - https://i.hamreus.com/   # image CDN, so the pinned node is fast for images too
   hosts:                 # hosts routed through the proxy; "." prefix matches subdomains
     - manhuagui.com
     - .manhuagui.com

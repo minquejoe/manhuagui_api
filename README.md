@@ -29,11 +29,16 @@ HTTP latency among all nodes of a v2ray-style VPN subscription:
    re-parsed (supports `vmess://`, `vless://`, `trojan://`, `ss://`, `socks://`
    lines, base64 or plaintext). Unsupported node types (hysteria2/tuic/ssr, ...)
    are skipped with a warning.
-3. All nodes are written into `xray/config.json` as outbounds. Xray's
-   `observatory` probes every node against `proxy.probe-url`
-   (`https://www.manhuagui.com/`) every `proxy.probe-interval` seconds and the
-   `leastPing` balancer routes the API's proxied traffic through the node with
-   the lowest measured latency. Node changes trigger an automatic xray restart.
+3. All nodes are written into `xray/config.json` as outbounds. Every
+   `proxy.probe-interval` seconds the manager re-selects the proxy node: xray's
+   `observatory` measures every node against `proxy.probe-url`
+   (`https://www.manhuagui.com/`), the manager additionally times each alive
+   node against every `proxy.probe-extra-url` (e.g. the image CDN
+   `https://i.hamreus.com/`, by temporarily pinning the node via the balancer
+   override API), and the node with the lowest combined latency is pinned via
+   the balancer override. Node changes from the subscription trigger an
+   automatic xray restart; when every node is dead the subscription is
+   re-fetched immediately (self-healing, rate-limited).
 4. Requests to `proxy.hosts` (manhuagui/hamreus domains by default) go through
    the local SOCKS proxy (`127.0.0.1:proxy.xray-socks-port`); everything else
    (e.g. GitHub API) stays direct. When xray is not ready, requests fall back
@@ -52,9 +57,11 @@ proxy:
   xray-api-port: 10810   # xray gRPC api (observatory + routing), 127.0.0.1 only
   subscriptions:         # v2ray-style subscription urls (base64 or plaintext)
     - https://example.com/sub?token=YOUR_TOKEN
-  refresh-interval: 3600 # seconds: re-fetch the subscription and restart xray if nodes changed
-  probe-interval: 60     # seconds: re-measure every node's latency to probe-url
+  refresh-interval: 86400 # seconds: re-fetch the subscription and restart xray if nodes changed (24h)
+  probe-interval: 3600    # seconds: re-measure every node's latency and re-select the best node (1h)
   probe-url: https://www.manhuagui.com/
+  probe-extra-urls:       # extra latency targets measured per node each round (combined with probe-url)
+    - https://i.hamreus.com/   # image CDN, so the pinned node is fast for images too
   hosts:                 # hosts routed through the proxy; "." prefix matches subdomains
     - manhuagui.com
     - .manhuagui.com

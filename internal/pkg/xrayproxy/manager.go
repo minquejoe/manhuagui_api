@@ -76,6 +76,8 @@ type Manager struct {
 	currentTag  string
 	lastRefresh time.Time // last subscription fetch, for the self-heal check
 
+	selectMu sync.Mutex // serializes selectBestNode rounds (initial + ticker)
+
 	stopCh chan struct{}
 	wg     sync.WaitGroup // loop goroutine
 	scanWg sync.WaitGroup // log scanner goroutines
@@ -131,18 +133,45 @@ func (m *Manager) loop() {
 	defer m.wg.Done()
 	m.refresh()
 	refreshTicker := time.NewTicker(time.Duration(m.cfg.RefreshInterval) * time.Second)
-	reportTicker := time.NewTicker(time.Duration(m.cfg.ProbeInterval) * time.Second)
+	probeTicker := time.NewTicker(time.Duration(m.cfg.ProbeInterval) * time.Second)
+	healTicker := time.NewTicker(2 * time.Minute)
 	defer refreshTicker.Stop()
-	defer reportTicker.Stop()
+	defer probeTicker.Stop()
+	defer healTicker.Stop()
+
+	// first node selection shortly after the first observatory round
+	time.AfterFunc(15*time.Second, func() {
+		m.selectMu.Lock()
+		defer m.selectMu.Unlock()
+		m.selectBestNode()
+	})
+
 	for {
 		select {
 		case <-m.stopCh:
 			return
 		case <-refreshTicker.C:
 			m.refresh()
-		case <-reportTicker.C:
+		case <-probeTicker.C:
 			m.report()
+			m.selectMu.Lock()
+			m.selectBestNode()
+			m.selectMu.Unlock()
+		case <-healTicker.C:
+			m.healCheck()
 		}
+	}
+}
+
+// healCheck refreshes the subscription when every node is dead, but is
+// rate-limited to avoid hammering the subscription server.
+func (m *Manager) healCheck() {
+	m.mu.RLock()
+	nodeCount, lastRefresh, alive := m.nodeCount, m.lastRefresh, len(m.latency)
+	m.mu.RUnlock()
+	if nodeCount > 0 && alive == 0 && time.Since(lastRefresh) > 2*time.Minute {
+		m.logger.Warnf("[xray] all %d nodes are dead, refreshing subscription now", nodeCount)
+		m.refresh()
 	}
 }
 
@@ -236,10 +265,7 @@ func (m *Manager) refresh() {
 	m.logger.Infof("[xray] xray started with %d nodes, probing %s every %ds", len(nodes), m.cfg.ProbeURL, m.cfg.ProbeInterval)
 }
 
-// report logs the current lowest-latency node (from parsed probe logs) and the
-// balancer's actual selection (queried via the xray gRPC API). When every node
-// is dead, it triggers an immediate subscription refresh (self-healing), but
-// rate-limited to avoid hammering the subscription server.
+// report logs the currently pinned/selected node and the probe latencies.
 func (m *Manager) report() {
 	m.mu.RLock()
 	names := make(map[string]string, len(m.nodeNames))
@@ -250,17 +276,10 @@ func (m *Manager) report() {
 	for k, v := range m.latency {
 		latency[k] = v
 	}
-	nodeCount := m.nodeCount
-	lastRefresh := m.lastRefresh
 	m.mu.RUnlock()
 
 	if len(latency) == 0 {
-		if nodeCount > 0 && time.Since(lastRefresh) > 2*time.Minute {
-			m.logger.Warnf("[xray] all %d nodes are dead, refreshing subscription now", nodeCount)
-			m.refresh()
-		} else {
-			m.logger.Debug("[xray] no probe result yet")
-		}
+		m.logger.Debug("[xray] no probe result yet")
 		return
 	}
 
@@ -302,6 +321,125 @@ func (m *Manager) report() {
 	} else {
 		m.logger.Infof("[xray] best node %s | top: %s", displayName(best.tag, best.name), strings.Join(parts, ", "))
 	}
+}
+
+// selectBestNode measures every alive node against probe-url (from the
+// observatory results) plus each probe-extra-url (temporarily pinning the node
+// via the balancer override API and timing a request through the socks proxy),
+// then pins the node with the lowest combined latency as the proxy node.
+func (m *Manager) selectBestNode() {
+	if len(m.cfg.ProbeExtraURLs) == 0 {
+		return
+	}
+	m.mu.RLock()
+	names := make(map[string]string, len(m.nodeNames))
+	for k, v := range m.nodeNames {
+		names[k] = v
+	}
+	latency := make(map[string]int64, len(m.latency))
+	for k, v := range m.latency {
+		latency[k] = v
+	}
+	m.mu.RUnlock()
+
+	tags := make([]string, 0, len(latency))
+	for tag := range latency {
+		tags = append(tags, tag)
+	}
+	if len(tags) == 0 {
+		m.logger.Debug("[xray] node selection skipped: no probe result yet")
+		return
+	}
+
+	type score struct {
+		tag     string
+		name    string
+		primary int64 // probe-url latency (observatory)
+		extra   int64 // combined extra-url latencies
+		total   int64
+	}
+	scores := make([]score, 0, len(tags))
+	extraCount := 0
+	extraOK := 0
+	for _, tag := range tags {
+		s := score{tag: tag, name: names[tag], primary: latency[tag]}
+		dead := false
+		for _, u := range m.cfg.ProbeExtraURLs {
+			ms, ok := m.measureViaNode(tag, u)
+			extraCount++
+			if !ok {
+				dead = true
+				break
+			}
+			s.extra += ms
+			extraOK++
+		}
+		if dead {
+			m.logger.Warnf("[xray] node %s unreachable for extra probe, excluded", displayName(tag, names[tag]))
+			continue
+		}
+		s.total = s.primary + s.extra
+		scores = append(scores, s)
+	}
+	if len(scores) == 0 {
+		m.logger.Warn("[xray] no node passed extra probing, keeping current selection")
+		return
+	}
+	sort.Slice(scores, func(i, j int) bool { return scores[i].total < scores[j].total })
+	best := scores[0]
+	if err := m.overrideBalancer(best.tag); err != nil {
+		m.logger.Errorf("[xray] failed to pin node %s: %v", displayName(best.tag, best.name), err)
+		return
+	}
+	m.mu.Lock()
+	m.currentTag = best.tag
+	m.mu.Unlock()
+
+	top := scores
+	if len(top) > 3 {
+		top = top[:3]
+	}
+	parts := make([]string, 0, len(top))
+	for _, s := range top {
+		parts = append(parts, fmt.Sprintf("%s %dms(manhuagui)+%dms(extra)=%dms", displayName(s.tag, s.name), s.primary, s.extra, s.total))
+	}
+	m.logger.Infof("[xray] pinned node %s | %s", displayName(best.tag, best.name), strings.Join(parts, ", "))
+}
+
+// measureViaNode temporarily pins the balancer to the given node and times an
+// HTTP GET to the target url through the local socks proxy. Returns the
+// latency in ms and whether the request succeeded.
+func (m *Manager) measureViaNode(tag, rawURL string) (int64, bool) {
+	if err := m.overrideBalancer(tag); err != nil {
+		return 0, false
+	}
+	proxyURL, _ := url.Parse("socks5://" + m.SocksAddr())
+	client := &http.Client{
+		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)},
+		Timeout:   10 * time.Second,
+	}
+	start := time.Now()
+	resp, err := client.Get(rawURL)
+	if err != nil {
+		return 0, false
+	}
+	io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	return time.Since(start).Milliseconds(), true
+}
+
+// overrideBalancer pins the balancer selection to the given outbound tag via
+// the xray RoutingService.
+func (m *Manager) overrideBalancer(tag string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, m.cfg.XrayBin, "api", "bo",
+		fmt.Sprintf("--server=127.0.0.1:%d", m.cfg.ApiPort), "-b", "balancer", tag)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func displayName(tag, name string) string {

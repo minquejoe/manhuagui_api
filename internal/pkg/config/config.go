@@ -71,6 +71,13 @@ type ProxyConfig struct {
 	ProbeInterval   uint64 `yaml:"probe-interval"   default:"60"   validate:"omitempty,gt=0"` // seconds, re-probe node latency
 	ProbeURL        string `yaml:"probe-url"        default:"https://www.manhuagui.com/"`
 
+	// ProbeExtraURLs are extra latency targets probed by the manager itself
+	// (e.g. the image CDN https://i.hamreus.com/). Every probe round, each
+	// alive node is measured against probe-url (xray observatory) and these
+	// extra urls (temporarily selected via the balancer override API); the
+	// node with the lowest combined latency is then pinned as the proxy node.
+	ProbeExtraURLs []string `yaml:"probe-extra-urls"`
+
 	// Hosts whose requests are routed through the proxy. Entries may start
 	// with "." to match any subdomain. Defaults to manhuagui/hamreus domains.
 	Hosts []string `yaml:"hosts"`
